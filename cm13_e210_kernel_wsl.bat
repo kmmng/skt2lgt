@@ -90,8 +90,13 @@ set k_src_2=cmuber
 )
 Echo Configuring WSL installation... This can take a long time on the first run...
 lxrun /install /y 1>>nul 2>>nul
-bash -c "sudo apt-get -q=2 -y install git-core dos2unix flex bison build-essential" 1>>nul 2>>nul
+bash -c "sudo apt-get -q=2 -y install git-core dos2unix flex bison build-essential zip" 1>>nul 2>>nul
 if not "%k_src%"=="fullgreen" copy %~dp0c1kernel-cm.diff temppatch.diff 1>>nul 2>>nul
+copy %~dp0\camera\s5c73m3.c s5c73m3.c 1>>nul 2>>nul
+copy %~dp0\camera\s5c73m3.h s5c73m3.h 1>>nul 2>>nul
+copy %~dp0\camera\s5c73m3_spi.c s5c73m3_spi.c 1>>nul 2>>nul
+copy %~dp0\camera\s5c73m3_platform.h s5c73m3_platform.h 1>>nul 2>>nul
+copy %~dp0\camera\midas-camera.c midas-camera.c 1>>nul 2>>nul
 if not "%k_src%"=="boeffla" copy %~dp0template.zip cm-13.0-%c_date%-%k_src_2%-kernel-%dev_model%.zip 1>>nul 2>>nul
 echo Running WSL shell script...
 del zImage 2>>nul
@@ -113,6 +118,12 @@ REM This is needed to update to latest toolchain in case git checkout was done i
 1>>temp.sh echo git clone %k_url% 2^>^>/dev/null
 if not "%k_src%"=="fullgreen" (
 1>>temp.sh echo mv temppatch.diff %k_dir%
+1>>temp.sh echo mkdir -p %k_dir%/camera
+1>>temp.sh echo mv s5c73m3.c %k_dir%/camera/
+1>>temp.sh echo mv s5c73m3.h %k_dir%/camera/
+1>>temp.sh echo mv s5c73m3_spi.c %k_dir%/camera/
+1>>temp.sh echo mv s5c73m3_platform.h %k_dir%/camera/
+1>>temp.sh echo mv midas-camera.c %k_dir%/camera/
 )
 1>>temp.sh echo cd %k_dir%
 REM This is needed to update to latest source in case git checkout was done in earlier run
@@ -148,6 +159,21 @@ if "%tc_dir%"=="arm-eabi-6.0" (
 )
 REM End of workaround
 )
+REM Disable CDMA modem init as it not used by our build
+1>>temp.sh echo %scmd% 's/	setup_cdma_modem_env();/#if !defined(CONFIG_C1_LGT_EXPERIMENTAL)\n	setup_cdma_modem_env();\n#endif/' arch/arm/mach-exynos/board-c1lgt-modems.c
+1>>temp.sh echo %scmd% 's/	config_cdma_modem_gpio();/#if !defined(CONFIG_C1_LGT_EXPERIMENTAL)\n	config_cdma_modem_gpio();\n#endif/' arch/arm/mach-exynos/board-c1lgt-modems.c
+1>>temp.sh echo %scmd% 's/	bnk_cfg = \^&cbp_edpram_bank_cfg;/#if !defined(CONFIG_C1_LGT_EXPERIMENTAL)\n	bnk_cfg = \^&cbp_edpram_bank_cfg;/' arch/arm/mach-exynos/board-c1lgt-modems.c
+1>>temp.sh echo %scmd% 's/	sromc_config_access_timing(bnk_cfg-^>csn, tm_cfg);/@ @ @ @/' arch/arm/mach-exynos/board-c1lgt-modems.c
+1>>temp.sh echo %scmd% '1,/@ @ @ @/s/@ @ @ @/	sromc_config_access_timing(bnk_cfg-^>csn, tm_cfg);/' arch/arm/mach-exynos/board-c1lgt-modems.c
+1>>temp.sh echo %scmd% '1,/@ @ @ @/s/@ @ @ @/	sromc_config_access_timing(bnk_cfg-^>csn, tm_cfg);\n#endif/' arch/arm/mach-exynos/board-c1lgt-modems.c
+1>>temp.sh echo %scmd% 's/	platform_device_register(\^&cdma_modem);/#if !defined(CONFIG_C1_LGT_EXPERIMENTAL)\n	platform_device_register(\^&cdma_modem);\n#endif/' arch/arm/mach-exynos/board-c1lgt-modems.c
+REM Update camera kernel driver from Samsung source, this seems to make camera app glitches less severe
+1>>temp.sh echo mv camera/s5c73m3.c drivers/media/video/
+1>>temp.sh echo mv camera/s5c73m3.h drivers/media/video/
+1>>temp.sh echo mv camera/s5c73m3_spi.c drivers/media/video/
+1>>temp.sh echo mv camera/s5c73m3_platform.h include/media/
+1>>temp.sh echo mv camera/midas-camera.c arch/arm/mach-exynos/
+1>>temp.sh echo rm -rf camera
 1>>temp.sh echo echo Cleaning...
 1>>temp.sh echo sleep 2
 if "%k_src%"=="boeffla" (
@@ -187,6 +213,14 @@ if not "%k_src%"=="fullgreen" (
 1>>temp.sh echo echo CONFIG_TDMB_VENDOR_RAONTECH=y^>^>%dest_cfg%
 1>>temp.sh echo echo CONFIG_TDMB_MTV318=y^>^>%dest_cfg%
 1>>temp.sh echo echo CONFIG_TDMB_SPI=y^>^>%dest_cfg%
+REM Fix video playback error, thanks to FullGreen
+1>>temp.sh echo %scmd% 's/CONFIG_DMA_CMA=y//' %dest_cfg%
+1>>temp.sh echo %scmd% '/CONFIG_CMA_SIZE_MBYTES/d' %dest_cfg%
+1>>temp.sh echo %scmd% '/CONFIG_CMA_SIZE_SEL_MBYTES/d' %dest_cfg%
+1>>temp.sh echo %scmd% '/CONFIG_CMA_ALIGNMENT/d' %dest_cfg%
+1>>temp.sh echo %scmd% '/CONFIG_CMA_AREAS/d' %dest_cfg%
+1>>temp.sh echo %scmd% 's/CONFIG_USE_FIMC_CMA=y//' %dest_cfg%
+1>>temp.sh echo %scmd% 's/CONFIG_USE_MFC_CMA=y//' %dest_cfg%
 )
 if "%dev_model%"=="c1lgt" (
 1>>temp.sh echo echo CONFIG_MACH_C1_KOR_LGT=y^>^>%dest_cfg%
